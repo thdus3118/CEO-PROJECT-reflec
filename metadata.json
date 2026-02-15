@@ -1,0 +1,5 @@
+{
+  "name": "성찰노트 (Reflection Note)",
+  "description": "학생의 일일 학습 성찰을 기록하고 교사가 AI 분석을 통해 모니터링하는 스마트 교실 솔루션",
+  "requestFramePermissions": []
+}
