@@ -9,7 +9,6 @@ interface AdminDashboardProps {
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onUpdateUser }) => {
-  // 최초 로그인 상태면 무조건 settings(비밀번호 변경) 탭으로 초기화
   const [activeTab, setActiveTab] = useState<'teachers' | 'settings'>(user.isFirstLogin ? 'settings' : 'teachers');
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [isAddingTeacher, setIsAddingTeacher] = useState(false);
@@ -32,6 +31,38 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onUpdateUser }) =
   };
 
   const teachers = allUsers.filter(u => u.role === UserRole.TEACHER);
+
+  const handleAdminPasswordChange = (e: React.FormEvent) => {
+    e.preventDefault();
+    const currentInput = adminPasswords.current.trim();
+    const nextInput = adminPasswords.next.trim();
+    const confirmInput = adminPasswords.confirm.trim();
+
+    if (currentInput !== user.passwordHash) { 
+      alert("현재 관리자 비밀번호가 일치하지 않습니다."); 
+      return; 
+    }
+    if (nextInput !== confirmInput) { 
+      alert("새 비밀번호 확인이 일치하지 않습니다."); 
+      return; 
+    }
+    
+    if (!/^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/.test(nextInput)) {
+      alert("비밀번호는 8자리 이상의 영문+숫자+특수문자 조합이어야 합니다.");
+      return;
+    }
+
+    const updatedUser = { ...user, passwordHash: nextInput, isFirstLogin: false };
+    const nextUsers = DB.getUsers().map(u => u.id === user.id ? updatedUser : u);
+    
+    DB.setUsers(nextUsers);
+    setAdminPasswords({ current: '', next: '', confirm: '' });
+    
+    // 중요: 상위 상태 업데이트 후 탭 전환
+    onUpdateUser(updatedUser);
+    setActiveTab('teachers');
+    alert("보안 업데이트가 완료되었습니다. 관리 업무를 시작합니다.");
+  };
 
   const handleAddTeacher = (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,41 +107,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onUpdateUser }) =
     }
   };
 
-  const handleAdminPasswordChange = (e: React.FormEvent) => {
-    e.preventDefault();
-    const currentInput = adminPasswords.current.trim();
-    const nextInput = adminPasswords.next.trim();
-    const confirmInput = adminPasswords.confirm.trim();
-
-    if (currentInput !== user.passwordHash) { 
-      alert("현재 관리자 비밀번호가 일치하지 않습니다."); 
-      return; 
-    }
-    if (nextInput !== confirmInput) { 
-      alert("새 비밀번호 확인이 일치하지 않습니다."); 
-      return; 
-    }
-    
-    // Admin 비밀번호 규칙: 8자리 이상 영문+숫자+특수문자
-    if (!/^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/.test(nextInput)) {
-      alert("비밀번호는 8자리 이상의 영문+숫자+특수문자(!@#$%^&*) 조합이어야 합니다.");
-      return;
-    }
-
-    const updatedUser = { ...user, passwordHash: nextInput, isFirstLogin: false };
-    const nextUsers = DB.getUsers().map(u => u.id === user.id ? updatedUser : u);
-    
-    // 데이터 저장
-    DB.setUsers(nextUsers);
-    
-    // UI 업데이트
-    setAdminPasswords({ current: '', next: '', confirm: '' });
-    setActiveTab('teachers'); // 비밀번호 변경 성공 시 관리 탭으로 강제 이동
-    onUpdateUser(updatedUser); // 상위 App 상태 업데이트
-
-    alert("보안 업데이트가 완료되었습니다. 관리 업무를 시작합니다.");
-  };
-
   if (user.isFirstLogin) {
     return (
       <div className="max-w-xl mx-auto space-y-8 py-12 animate-in slide-in-from-bottom-4">
@@ -118,7 +114,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onUpdateUser }) =
           <div className="w-24 h-24 bg-slate-800 text-white rounded-[2rem] flex items-center justify-center mx-auto text-4xl">🛡️</div>
           <div className="space-y-3">
             <h3 className="text-3xl font-black text-slate-800">최고 관리자 인증 강화</h3>
-            <p className="text-sm text-slate-400 font-bold leading-relaxed">시스템 보안을 위해 최고 관리자의 초기 비밀번호를<br/>반드시 변경해야 합니다. (8자 이상, 영문/숫자/특수문자)</p>
+            <p className="text-sm text-slate-400 font-bold leading-relaxed">시스템 보안을 위해 최고 관리자의 초기 비밀번호를<br/>반드시 변경해야 합니다.</p>
           </div>
           <form onSubmit={handleAdminPasswordChange} className="space-y-4 text-left">
             <input type="password" placeholder="현재 비밀번호 (기초: 0000)" required value={adminPasswords.current} onChange={e => setAdminPasswords({...adminPasswords, current: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
@@ -140,17 +136,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onUpdateUser }) =
         </div>
       )}
 
-      {/* Admin Header Card */}
       <div className="bg-slate-800 rounded-[2.5rem] p-10 text-white shadow-xl flex flex-col md:flex-row justify-between items-center gap-6">
         <div className="space-y-1 text-center md:text-left">
           <h2 className="text-3xl font-black tracking-tight">시스템 관리자 대시보드</h2>
           <p className="text-slate-400 font-bold">전체 교사 계정 및 시스템 설정을 관리합니다.</p>
         </div>
-        <div className="flex gap-4">
-          <div className="bg-white/10 px-8 py-5 rounded-[2rem] border border-white/10 text-center">
-            <div className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-1">등록된 전체 교사</div>
-            <div className="text-5xl font-black leading-none">{teachers.length}명</div>
-          </div>
+        <div className="bg-white/10 px-8 py-5 rounded-[2rem] border border-white/10 text-center">
+          <div className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-1">등록된 전체 교사</div>
+          <div className="text-5xl font-black leading-none">{teachers.length}명</div>
         </div>
       </div>
 
@@ -196,7 +189,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onUpdateUser }) =
                 ))}
               </tbody>
             </table>
-            {teachers.length === 0 && <div className="p-32 text-center text-slate-200 font-black text-2xl">등록된 교사 정보가 없습니다.</div>}
           </div>
         </div>
       )}
@@ -206,10 +198,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onUpdateUser }) =
           <div className="bg-white p-12 rounded-[3rem] border border-slate-200 shadow-sm space-y-8">
             <h3 className="text-2xl font-black text-slate-800">관리자 보안 설정</h3>
             <form onSubmit={handleAdminPasswordChange} className="space-y-4">
-              <input type="password" required value={adminPasswords.current} onChange={e => setAdminPasswords({...adminPasswords, current: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold focus:ring-2 focus:ring-indigo-500" placeholder="현재 비밀번호" />
-              <input type="password" required value={adminPasswords.next} onChange={e => setAdminPasswords({...adminPasswords, next: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold focus:ring-2 focus:ring-indigo-500" placeholder="새 비밀번호 (8자 이상 영숫자+특수문자)" />
-              <input type="password" required value={adminPasswords.confirm} onChange={e => setAdminPasswords({...adminPasswords, confirm: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold focus:ring-2 focus:ring-indigo-500" placeholder="새 비밀번호 확인" />
-              <button type="submit" className="w-full bg-slate-800 text-white py-6 rounded-[1.5rem] font-black hover:bg-black transition-all shadow-xl transform active:scale-95">비밀번호 업데이트</button>
+              <input type="password" required value={adminPasswords.current} onChange={e => setAdminPasswords({...adminPasswords, current: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold" placeholder="현재 비밀번호" />
+              <input type="password" required value={adminPasswords.next} onChange={e => setAdminPasswords({...adminPasswords, next: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold" placeholder="새 비밀번호" />
+              <input type="password" required value={adminPasswords.confirm} onChange={e => setAdminPasswords({...adminPasswords, confirm: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl font-bold" placeholder="새 비밀번호 확인" />
+              <button type="submit" className="w-full bg-slate-800 text-white py-6 rounded-[1.5rem] font-black hover:bg-black transition-all">비밀번호 업데이트</button>
             </form>
           </div>
         </div>
@@ -221,9 +213,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onUpdateUser }) =
           <form onSubmit={handleAddTeacher} className="relative w-full max-w-sm bg-white rounded-[3rem] p-10 shadow-2xl space-y-6">
             <h3 className="text-2xl font-black text-slate-800 text-center">신규 교사 계정 생성</h3>
             <div className="space-y-4">
-              <input type="text" placeholder="교사 성함" required value={newTeacher.name} onChange={e => setNewTeacher({...newTeacher, name: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
-              <input type="text" placeholder="로그인 아이디" required value={newTeacher.loginId} onChange={e => setNewTeacher({...newTeacher, loginId: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
-              <input type="password" placeholder="초기 비밀번호" required value={newTeacher.password} onChange={e => setNewTeacher({...newTeacher, password: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-indigo-500" />
+              <input type="text" placeholder="교사 성함" required value={newTeacher.name} onChange={e => setNewTeacher({...newTeacher, name: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none" />
+              <input type="text" placeholder="로그인 아이디" required value={newTeacher.loginId} onChange={e => setNewTeacher({...newTeacher, loginId: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none" />
+              <input type="password" placeholder="초기 비밀번호" required value={newTeacher.password} onChange={e => setNewTeacher({...newTeacher, password: e.target.value})} className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none" />
             </div>
             <div className="flex gap-3">
               <button type="button" onClick={() => setIsAddingTeacher(false)} className="flex-1 py-5 bg-slate-100 font-black rounded-2xl">취소</button>
